@@ -1,0 +1,287 @@
+---
+title: "Isocronas_CDPCII"
+author: "Sixto Cristiani"
+date: "2022-11-25"
+output: html_document
+---
+
+
+
+```{r}
+library("tidyverse")
+library("ggplot2")
+library("sf")
+library("osmdata")
+library("rmarkdown")
+library("lubridate")
+library("ggmap") 
+library("mapview")
+library("hrbrthemes")
+library("RColorBrewer")
+library("leaflet")
+library("osmextract")
+library("forcats")
+library("osrm")
+library("hereR")
+
+```
+
+
+
+
+```{r}
+Nordelta = data.frame(-58.6814666,-34.4000434)
+
+colnames(Nordelta) <- c('lon','lat')
+
+Nordelta =  st_as_sf(x = Nordelta, coords = c("lon", "lat"),  crs = 4326)
+```
+
+
+
+```{r}
+Recoleta =  data.frame(-58.3914178,-34.5911356)
+
+colnames(Recoleta) <- c('lon','lat')
+
+Recoleta =  st_as_sf(x = Recoleta, coords = c("lon", "lat"),  crs = 4326)
+```
+
+
+```{r}
+mapview(Recoleta) + mapview(Nordelta)
+```
+
+```{r}
+Nordelta_Isocrona = osrmIsochrone(loc = Nordelta, seq(from = 0, to = 20, seq = 5),  osrm.profile = "foot")
+
+```
+
+```{r}
+Recoleta_Isocrona = osrmIsochrone(loc = Recoleta, seq(from = 0, to = 20, seq = 5),  osrm.profile = "foot")
+
+```
+
+
+```{r}
+
+mapview(Nordelta, color = "red") + mapview(Recoleta_Isocrona, zcol = "center") + mapview(Nordelta_Isocrona,zcol = "center") + mapview(Recoleta, color = "red")
+```
+
+
+```{r}
+st_area(Nordelta_Isocrona)
+```
+
+```{r}
+st_area(Recoleta_Isocrona)
+```
+Nos quedamos con el más grande de cada dataset.
+
+
+```{r}
+Nordelta_Isocrona_top = osrmIsochrone(loc = Nordelta, seq(from = 0, to = 20),  osrm.profile = "foot")
+
+```
+
+```{r}
+Recoleta_Isocrona_top = osrmIsochrone(loc = Recoleta, seq(from = 0, to = 20),  osrm.profile = "foot")
+
+```
+
+
+```{r}
+
+mapview(Nordelta, color = "red") + mapview(Recoleta_Isocrona_top) + mapview(Nordelta_Isocrona_top) + mapview(Recoleta, color = "red")
+```
+```{r}
+mapview(Recoleta_Isocrona_top, zcol = "center")
+```
+
+
+```{r}
+mapview(Nordelta_Isocrona_top, zcol = "center")
+```
+
+
+```{r}
+st_area(Nordelta_Isocrona_top)
+```
+
+```{r}
+
+st_area(Recoleta_Isocrona_top)
+```
+
+```{r}
+st_area(Nordelta_Isocrona_top) / st_area(Recoleta_Isocrona_top)
+
+```
+
+
+```{r}
+Nordelta_Isocrona_top_auto = osrmIsochrone(loc = Nordelta, seq(from = 0, to = 15),  osrm.profile = "car")
+
+```
+
+```{r}
+Recoleta_Isocrona_top_auto = osrmIsochrone(loc = Recoleta, seq(from = 0, to = 15),  osrm.profile = "car")
+
+```
+
+
+
+
+```{r}
+mapview(Nordelta, color = "red") + mapview(Nordelta_Isocrona_top_auto, zcol = "center") 
+```
+
+
+```{r}
+mapview(Recoleta_Isocrona_top_auto,zcol = "center") + mapview(Recoleta, color = "red")
+```
+
+```{r}
+st_area(Nordelta_Isocrona_top_auto) / st_area(Recoleta_Isocrona_top_auto)
+
+```
+
+
+Ahora que ya jugamos un poco con los mapas y las isocronas vamos a ver como varía el acceso a diferentes bienes y servicios según el barrio de CABA. 
+
+
+Vamos a trabajar con la infraestructura universitaria y los barrios
+
+
+```{r}
+barrios <- st_read('https://bitsandbricks.github.io/data/CABA_barrios.geojson')
+
+```
+Cambiamos el nombre de villa lugano
+
+```{r}
+barrios$BARRIO[barrios$BARRIO == "VILLA LUGANO"] <- 'Villa Lugano'
+barrios$BARRIO[barrios$BARRIO == "RECOLETA"] <- 'Recoleta'
+
+```
+
+
+Calculamos los centroides de los barrios
+
+```{r}
+barrios_centroides = st_centroid(barrios)
+```
+Descomprimimos la geometría
+
+```{r}
+barrios_centroides <- barrios_centroides %>%
+mutate(lat = unlist(map(barrios_centroides$geometry,1)),
+long = unlist(map(barrios_centroides$geometry,2)))
+```
+
+```{r}
+Lugano = filter(barrios_centroides, BARRIO == "Villa Lugano")
+```
+
+
+```{r}
+Recoleta = filter(barrios_centroides, BARRIO == "Recoleta")
+```
+
+Universidades
+
+```{r}
+Universidades = read.csv("https://cdn.buenosaires.gob.ar/datosabiertos/datasets/ministerio-de-educacion/universidades/universidades.csv")
+
+```
+
+
+```{r}
+colnames(Universidades)[16] <- "BARRIO"
+
+```
+
+
+
+```{r}
+uba = filter(Universidades, universida =="Universidad de Buenos Aires")
+```
+
+```{r}
+ruteo_universidades <- function(o_nombre, o_x, o_y, d_nombre, d_x, d_y) {
+  ruta <- osrmRoute(src = c(o_nombre, o_x, o_y),
+                    dst = c(d_nombre, d_x, d_y), 
+                    returnclass = "sf",
+                    overview = "full")
+  
+  cbind(ORIGEN = o_nombre, DESTINO = d_nombre, ruta)
+}
+```
+
+
+
+```{r}
+Recoleta_Uba = mutate(uba, Origen ="Recoleta", lon.y = -58.39522 , lat.y = -34.58624
+)
+```
+
+```{r}
+Recoleta_Uba = Recoleta_Uba %>% select(Origen, lon.y, lat.y, unidad_aca, long, lat)
+```
+
+```{r}
+ruteo_universidad = ruteo_universidades(Recoleta_Uba$Origen,Recoleta_Uba$lon.y,Recoleta_Uba$lat.y,Recoleta_Uba$unidad_aca,Recoleta_Uba$long,Recoleta_Uba$lat)
+```
+```{r}
+ruteo_Recoleta <- list(Recoleta_Uba$Origen, Recoleta_Uba$lon.y,Recoleta_Uba$lat.y,
+                   Recoleta_Uba$unidad_aca, Recoleta_Uba$long,Recoleta_Uba$lat)
+```
+
+
+```{r}
+ruteo_Recoleta_1 <- pmap(ruteo_Recoleta, ruteo_universidad) %>% 
+  reduce(rbind)
+```
+
+
+
+```{r}
+ruta = osrmRoute(src = c(Recoleta_Uba$Origen, Recoleta_Uba$lon.y, Recoleta_Uba$lat.y),
+                 dst = c(Recoleta_Uba$unidad_aca, Recoleta_Uba$long, Recoleta_Uba$lat), 
+                    returnclass = "sf",
+                    overview = "full")
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
